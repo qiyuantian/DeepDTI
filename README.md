@@ -2,6 +2,8 @@
 
 ![DeepDTI Pipeline](https://github.com/qiyuantian/DeepDTI/blob/main/pipeline.png)
 
+**Diffusion physics-informed and CNN-based DeepDTI pipeline**. The input is a single b = 0 image and six diffusion-weighted image (DWI) volumes sampled along optimized diffusion-encoding directions (a) (with or without anatomical, e.g., T1-weighted and T2-weighted image volumes). The output is the high-quality b = 0 image volume and six DWI volumes sampled along optimized diffusion-encoding directions transformed from the diffusion tensor fitted using all available b = 0 images and DWIs (b). A deep 3-dimensional convolutional neural network (CNN) comprised of stacked convolutional filters paired with ReLU activation functions (n = 10, k = 190, d = 3, c = 9, p = 7) is adopted to map the input image volumes to the residuals between the input and output image volumes (c). More advanced CNNs can be use to improve permance.
+
 ## s_DeepDTI_prepData.m
 
 Step-by-step MATLAB tutorial for preparing the input and ground-truth data for convolutional neural network in DeepDTI. HTML file can be automatically generaged using command: publish('s_DeepDTI_prepData.m', 'html').
