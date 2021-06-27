@@ -1,5 +1,7 @@
 # DeepDTI
 
+![DeepDTI Pipeline](https://github.com/qiyuantian/DeepDTI/blob/main/pipeline.png)
+
 ## s_DeepDTI_prepData.m
 
 Step-by-step MATLAB tutorial for preparing the input and ground-truth data for convolutional neural network in DeepDTI. HTML file can be automatically generaged using command: publish('s_DeepDTI_prepData.m', 'html').
