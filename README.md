@@ -9,6 +9,10 @@
 
 **Comprison of results**. DeepDTI results recover improved signal-to-noise ratio, image sharpness, and detailed anatomical information buried in the noise in the raw data and blurred out in the BM4D-noised results. Quantitative comparison can be found in the NeuroImage paper of DeepDTI.
 
+![Comparison of tractography results](https://github.com/qiyuantian/DeepDTI/blob/main/tracks.png)
+
+**Comprison of tractography results**. DeepDTI denoised data recover more white matter fibers. Quantitative comparison of reconstructed fiber tracts and tract-specific analysis can be found in the NeuroImage paper of DeepDTI.
+
 ## s_DeepDTI_prepData.m
 
 Step-by-step MATLAB tutorial for preparing the input and ground-truth data for convolutional neural network in DeepDTI. HTML file can be automatically generaged using command: publish('s_DeepDTI_prepData.m', 'html').
