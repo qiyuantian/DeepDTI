@@ -2,7 +2,7 @@
 
 ## s_DeepDTI_prepData.m
 
-MATLAB script for preparing the input and ground-truth data for convolutional neural network in DeepDTI.
+Step-by-step tutorial for preparing the input and ground-truth data for convolutional neural network in DeepDTI in MATLAB. HTML file can be automatically generaged using command: publish('s_DeepDTI_prepData.m', 'html');
 
 **Utility functions**
 
