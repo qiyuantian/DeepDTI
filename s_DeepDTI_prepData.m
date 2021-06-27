@@ -6,290 +6,243 @@
 %   network in DeepDTI.
 %
 %   Source code:
-%       https://github.com/qiyuantian/GDSI/blob/master/s_GDSI_tutorial.m
+%       https://github.com/qiyuantian/DeepDTI/blob/main/s_DeepDTI_prepData.m
 %
 %   HTML file can be automatically generaged using command:
 %       publish('s_DeepDTI_prepData.m', 'html');
 %
 %   Reference:
-%       [1] Tian Q, Yang G, Leuze C, Rokem A, Edlow BL, McNab JA, Generalized
-%       Diffusion Spectrum Magnetic Resonance Imaging (GDSI) for Model-free
-%       Reconstruction of the Ensemble Average Propagator. NeuroImage, 2019;
-%       189: 497-515.
+%       [1] Tian Q, Bilgic B, Fan Q, Liao C, Ngamsombat C, Hu Y, Witzel T,
+%       Setsompop K, Polimeni JR, Huang SY. DeepDTI: High-fidelity
+%       six-direction diffusion tensor imaging using deep learning.
+%       NeuroImage. 2020;219:117017. 
 %
-% (c) Qiyuan Tian, Stanford RSL
+%       [2] Tian Q, Li Z, Fan Q, Ngamsombat C, Hu Y, Liao C, Wang F,
+%       Setsompop K, Polimeni JR, Bilgic B, Huang SY. SRDTI: Deep
+%       learning-based super-resolution for diffusion tensor MRI. arXiv
+%       preprint. 2021; arXiv:2102.09069.
+%
+% (c) Qiyuan Tian, Harvard, 2021
 
-%% prepare diffusion data
+%% load data
 
-% Load a single voxel from MGH-USC HCP data (pink box in Fig.10 in [1]),
-% with 40xb=0, 64xb=1k, 64xb=3k, 128xb=5k, 256xb=10k
 clear, clc, close all
-load('data/multishell_vox.mat'); 
 
-mask_b0 = bval == 0; 
-b0s = data(mask_b0); % b0 volumes
-dwis = data(~mask_b0); % dwi volumes
+tmp = load('data.mat');
+data = double(tmp.data); % 18 b = 0 volumes and 90 dwi volumes, only 70 axial slices
+% image data were corrected for intensity bias already, can use dwibiascorrect from MRtrix3
+% we did not evaluate the effects of bias on the performance of CNN
+bvals = tmp.bvals; % b = 1000 s/mm^2
+bvecs = tmp.bvecs;
+mask = tmp.mask;
 
-data = [mean(b0s); dwis]; % average b0 volumes
-data = data / mean(b0s); % normalize using b0
-bval = [0; bval(~mask_b0)]; % new bval
-bvec = [[0, 0, 0]; bvec(~mask_b0, :)]; % new bvec
+b0s = data(:, :, :, bvals < 100); % all 18 b = 0 images
+meanb0 = mean(b0s, 4); % mean b = 0 images
+dwis = data(:, :, :, bvals > 100); % all 90 dwis
+bvals_dwi = bvals(bvals > 100); % bvals for dwis
+bvecs_dwi = bvecs(bvals > 100, :); % bvecs for dwis
 
-% display data
-figure
-plot(bval, data, '.');
-grid on;
-title('multi-shell diffusion signal');
-xlabel('b-value (s/mm^2)');
-ylabel('normalized signal');
+dirs = bvecs(bvals > 100, :); % 90 diffusion-encoding directions
+dirs_vis = dirs .* sign(dirs(:, 3)); % directions flipped to z > 0 for visualization
+sz_data = size(data);
 
-%% calculate q-space sampling density nonuniformity correction factor (Fig.4b in [1])
+figure; % display image data
+subplot(1, 2, 1)
+imshow(data(:, :, 35, 1), [0, 10000])
+title('b = 0 image');
+subplot(1, 2, 2)
+imshow(data(:, :, 35, 2), [0, 4000])
+title('diffusion weighted image');
 
-bval = bval(:); % column vector
-disp('double check unique b values are:');
-disp(unique(bval)); % note a +/- 50 variance at b=10k
-bval_rnd = round(bval / 200) * 200; % round up bval
+figure; % display diffusion encoding directions, all flipped to z > 0 
+plot3(dirs_vis(:, 1), dirs_vis(:, 2), dirs_vis(:, 3), '.');
+grid on, axis equal
+zlim([-1, 1])
+title('90 diffusion encoding directions');
 
-bval_uniq = unique(bval_rnd); % unique bval
-count = zeros(size(bval_uniq)); % number of each bval
-for ii = 1 : length(bval_uniq)
-    count(ii) = sum(bval == bval_uniq(ii));
-end
+%% select optimized encoding directions
 
-qval_uniq = sqrt(bval_uniq / max(bval_uniq)); % nomalize unique qval, q~sqrt(b)
-qval_contour = (qval_uniq(1 : end-1) + qval_uniq(2 : end)) / 2; % middle contours
-qval_contour = [qval_contour; 2 * qval_uniq(end) - qval_contour(end)]; % extrapolate one outer contour 
+% 6 optimized directions from the DSM scheme that minimizes the condition
+% number of the diffusion tensor transformation matrix 
+% from S Skare et al., J Magn Reson. 2000;147(2):340-52
+dsm6 = [0.91, 0.416, 0; ...
+               0, 0.91, 0.416; ...
+               0.416, 0, 0.91; ...
+               0.91, -0.416, 0; ...
+               0, 0.91, -0.416; ...
+              -0.416, 0, 0.91];
 
-qvol_shell = diff(qval_contour .^ 3); % qspace volume associated with each shell
-qvol_shell = [qval_contour(1) .^ 3; qvol_shell]; % add in central sphere volume
+dsm6_norm = dsm6 ./ sqrt(dsm6(:, 1) .^ 2 + dsm6(:, 2) .^ 2 + dsm6(:, 3) .^ 2); % normalize vectors
 
-qvol_shell = qvol_shell / qvol_shell(1); % normalize central sphere volume to 1
-qvol_samp = qvol_shell ./ count; % qspace volume associated with a sample on a shell
-
-qvol = zeros(size(bval)); % qspace volume for each sample (C in Eq.4 in [1])
-for ii = 1 : length(bval_uniq)
-    b = bval_uniq(ii);
-    qvol(bval == b) = qvol_samp(ii);
-end
-
-% or can be simply computed using shelldens.m
-% qvol = shelldens(bval, 200);
-
-% display correction factor
-figure
-plot(bval_uniq, qvol_samp, '-o');
-grid on;
-ylim([0, 1]);
-title('sampling density nonuniformity correction factor');
-xlabel('b-value (s/mm^2)');
-ylabel('normalized correction factor');
-
-%% reconstruct 1D PDF profile along a specific direction (Fig.5f in [1])
-
-nr = 100;
-rs = linspace(0, 1, nr)'; % 100 distances btw [0, 1] of MDD of free water 
-pdf_dir = [0, 1, 0]; % A-P direction
-
-rvec = repmat(pdf_dir, [nr, 1]) .* repmat(rs, [1, 3]); % 100 displacements along A-P direction
-qvec = repmat(sqrt(6 * 0.0025 * bval), [1, 3]) .* bvec;
-F = cos(rvec * qvec') / length(bval); % Fourier matrix, Eq.5 in [1]
-
-pdf_1d = F * diag(qvol) * data; % Eq.4 in [1]
-
-pdf_1d_clip = pdf_1d;
-pdf_1d_clip(pdf_1d < 0) = 0; % clip negative pdf values to 0
-
-pdf_1d_ringfree = pdf_1d;
-ind_negative = find(pdf_1d < 0);
-pdf_1d_ringfree(ind_negative(1):end) = 0; % set pdf values beyond 1st zero-crossing to 0
-
-% display pdf profile
-figure, hold all
-plot(rs, pdf_1d, 'r', 'LineWidth', 6);
-plot(rs, pdf_1d_clip, 'g', 'LineWidth', 3);
-plot(rs, pdf_1d_ringfree, 'b--', 'LineWidth', 2);
-grid on;
-legend('original', 'negative clip', '1st zero-xing clip')
-title(['pdf profile along direction ' mat2str(pdf_dir)]);
-xlabel('ratio of mean displacement distance of free water');
-ylabel('diffusion probability density');
-
-%% reconstruct 3D PDF contour at a specific distance (Fig.5j in [1])
-
-[x, y ,z] = sphere(64); % sphere object
-fvc = surf2patch(x, y, z, z); % face, vertex and color data
-pdf_dirs = fvc.vertices; % directions on a sphere
-
-figure
-plot3(pdf_dirs(:,1),pdf_dirs(:,2),pdf_dirs(:,3), '.');
-axis equal
-grid on;
-title('directions on a sphere');
-
-r0 = 0.5; % 0.5 of MDD of free water 
-rvec = r0 * pdf_dirs;
-qvec = repmat(sqrt(6 * 0.0025 * bval), [1, 3]) .* bvec;
-F = cos(rvec * qvec') / length(bval);  % Fourier matrix, Eq.5 in [1]
-
-pdf_3d = F * diag(qvol) * data;
-
-pdf_3d_clip = pdf_3d;
-pdf_3d_clip(pdf_3d < 0) = 0; % clip negative pdf values to 0
-
-pdf_actor = fvc;
-pdf_actor.vertices = fvc.vertices .* repmat(pdf_3d, [1, 3]); % scale radial distance
-pdf_actor.facevertexcdata = pdf_3d; % change color data to represent pdf values
-
-% display pdf contour
-figure
-h = patch(pdf_actor);
-view(0, 0)
-lighting gouraud
-shading faceted
-camlight
-set(h, 'EdgeColor', 'none');
-
-colormap;
-colorbar;
-caxis([min(pdf_3d(:)), max(pdf_3d(:))]);
-
-axis equal, axis off, axis tight
-title(['pdf contour at ' num2str(r0) ' of MDD of free water']);
-
-% display positive pdf contour
-pdf_actor = fvc;
-pdf_actor.vertices = fvc.vertices .* repmat(pdf_3d_clip, [1, 3]); % scale radial distance
-pdf_actor.facevertexcdata = pdf_3d_clip; % change color data to represent pdf values
-
-figure
-h = patch(pdf_actor);
-view(0, 0)
-lighting gouraud
-shading faceted
-camlight
-set(h, 'EdgeColor', 'none');
-
-colormap;
-colorbar;
-caxis([min(pdf_3d(:)), max(pdf_3d(:))]);
-
-axis equal, axis off, axis tight
-title(['positive pdf contour at ' num2str(r0) ' of MDD of free water']);
-
-%% reconstruct ODF using direct approach (Fig.9 in [1])
-
-[x, y ,z] = sphere(64); % sphere object
-fvc = surf2patch(x, y, z, z); % face, vertex and color data
-odf_dirs = fvc.vertices; % directions on a sphere
-
-nr = 100;
-rs = linspace(0, 0.8, nr)'; % 100 distances btw [0, 0.8] of MDD of free water 
-R = zeros(length(odf_dirs), length(data));
-qvec = repmat(sqrt(6 * 0.0025 * bval), [1, 3]) .* bvec;
-for ii = 1 : nr 
-    r = rs(ii);
-    rvec = r * odf_dirs;
-    F = cos(rvec * qvec') / length(bval) * (r^2);
-    R = R + F; % odf recon matrix R, Eq.9 in [1]
-end
-
-odf_direct = R * diag(qvol) * data; % Eq.9 in [1]
-% odf_direct(odf_direct < 0) = 0; % clip negative values
-% odf_direct = odf_direct - min(odf_direct(:)); % remove offset
-
-% display odf
-odf_actor = fvc;
-odf_actor.vertices = fvc.vertices .* repmat(odf_direct, [1, 3]); % scale radial distance
-odf_actor.facevertexcdata = odf_direct; % change color data to represent pdf values
-
-figure
-h = patch(odf_actor);
-view(0, 0)
-lighting gouraud
-shading faceted
-camlight
-set(h, 'EdgeColor', 'none');
-
-colormap;
-colorbar;
-caxis([min(odf_direct(:)), max(odf_direct(:))]);
-
-axis equal, axis off, axis tight
-title('direct odf');
-
-% display component odf at single shell
-for ii = 1 : length(bval_uniq)
-    b = bval_uniq(ii);
-    data_shell = data; 
-    data_shell(bval_rnd ~= b) = 0;
-    odf_shell = R * diag(qvol) * data_shell;
+% randomly rotate the DSM6 dirs, select their nearest 6 dirs from acquired
+% dirs, keep those with low condition number and angel difference
+rotang_all = [];
+angerr_all  = [];
+condnum_all = [];
+ind_all = [];
+for ii = 1 : 100000 % number of iterations can be increased
     
-    odf_actor = fvc;
-    odf_actor.vertices = fvc.vertices .* repmat(odf_shell, [1, 3]); % scale radial distance
-    odf_actor.facevertexcdata = odf_shell; % change color data to represent pdf values
+    rotangs = rand(1, 3) * 2 * pi; % random angles to rotate around x, y, z axis
+    R = rot3d(rotangs); % rotation matrix
+    dsm6_rot = (R * dsm6_norm')'; % roated directions
+   
+    % find 6 nearest dirs in acquired dirs
+    angerrors = acosd(abs(dsm6_rot * dirs')); % angles btw rotated DSM6 dirs and acquired dirs
+    [minerrors, ind] = min(angerrors, [], 2); % 6 dirs with min angles compared to rotated DSM6 dirs
 
-    figure
-    h = patch(odf_actor);
-    view(0, 0)
-    lighting gouraud
-    shading faceted
-    camlight
-    set(h, 'EdgeColor', 'none');
-
-    colormap;
-    colorbar;
-    caxis([-0.1, 0.1]);
-
-    axis equal, axis off, axis tight
-    title(['component odf at b=' num2str(b)]);
-end
-
-%% reconstruct ODF using indirect approach (Fig.9 in [1])
-
-[x, y ,z] = sphere(64); % sphere object
-fvc = surf2patch(x, y, z, z); % face, vertex and color data
-odf_dirs = fvc.vertices; % directions on a sphere
-
-nr = 100;
-rs = linspace(0, 0.8, nr)'; % 100 distances btw [0, 1] of MDD of free water 
-
-qvec = repmat(sqrt(6 * 0.0025 * bval), [1, 3]) .* bvec;
-pdf = zeros(length(odf_dirs), nr);
-
-for ii = 1 : length(odf_dirs)
-    pdf_dir = odf_dirs(ii, :);
+    meanangerr = mean(minerrors); % mean angle errors of selected dirs
+    condnum = cond(amatrix(dirs(ind, :))); % cond number of tensor tx matrix of selected dirs
     
-    rvec = repmat(pdf_dir, [nr, 1]) .* repmat(rs, [1, 3]);
-    F = cos(rvec * qvec') / length(bval); % Fourier matrix, Eq.5 in [1]
-
-    pdf_1d = F * diag(qvol) * data; % Eq.4 in [1]
-    ind_negative = find(pdf_1d < 0);
-    if ~isempty(ind_negative)
-        pdf_1d(ind_negative(1):end) = 0; % set pdf values beyond 1st zero-crossing to 0
+    if meanangerr < 5 && condnum < 1.6 % only use dirs with low angle error and cond number
+        if isempty(ind_all) || ~any(sum(ind_all == sort(ind'), 2) == 6) % make sure no repetition
+            
+            % record params for satisfied sets
+            angerr_all = cat(1, angerr_all, meanangerr);
+            condnum_all = cat(1, condnum_all, condnum);
+            ind_all = cat(1, ind_all, sort(ind'));
+            rotang_all = cat(1, rotang_all, rotangs);
+        end
     end
-    pdf(ii, :) = pdf_1d;
 end
 
-odf_indirect = sum(pdf .* repmat(rs', [length(odf_dirs), 1]), 2);
-odf_indirect(odf_indirect < 0) = 0; % clip negative values
-odf_indirect = odf_indirect - min(odf_indirect(:)); % remove offset
+% here only select 5 sets of directions with lowest condition number
+% better to make sure all dwis can be equally slected and used for training 
+[~, ind_sort] = sort(condnum_all);
+ind_use = ind_all(ind_sort(1 : 5), :);
+condnum_use = condnum_all(ind_sort(1 : 5));
+angerr_use = angerr_all(ind_sort(1 : 5));
+rotang_use = rotang_all(ind_sort(1 : 5), :);
 
-% display odf
-odf_actor = fvc;
-odf_actor.vertices = fvc.vertices .* repmat(odf_indirect, [1, 3]); % scale radial distance
-odf_actor.facevertexcdata = odf_indirect; % change color data to represent pdf values
+figure; % display two selected sets of 6 optimal directions
+for ii = 1 : 2
+    subplot(1, 2, ii)
+    plot3(dirs_vis(:, 1), dirs_vis(:, 2), dirs_vis(:, 3), '.'); % all dirs
+    hold on
+    
+    visdirs_use = dirs_vis(ind_use(ii, :), :);
+    plot3(visdirs_use(:, 1), visdirs_use(:, 2), visdirs_use(:, 3), 'o'); % selected dirs
+    
+    R = rot3d(rotang_use(ii, :));
+    dsm6_rot = (R * dsm6_norm')';
+    dsm6_rot_vis = dsm6_rot .* sign(dsm6_rot(:, 3));
+    plot3(dsm6_rot_vis(:, 1), dsm6_rot_vis(:, 2), dsm6_rot_vis(:, 3), 'x'); % rotated DSM6 dirs
+    
+    grid on, axis equal
+    xlim([-1, 1])
+    ylim([-1, 1])
+    zlim([-1, 1])
+    title(['cond num=' num2str(condnum_use(ii))]);
+end
 
-figure
-h = patch(odf_actor);
-view(0, 0)
-lighting gouraud
-shading faceted
-camlight
-set(h, 'EdgeColor', 'none');
+%% generate input data of CNN
+input_all = {};
+tensor_all = {};
+bval_synth = 1000; % b value for synthesized dwis
 
-colormap;
-colorbar;
-caxis([min(odf_indirect(:)), max(odf_indirect(:))]);
+for ii = 1 : 5
+    b0 = b0s(:, :, :, ii); % a single b=0 image for each set of selected 6 dwis
+    dwis6 = dwis(:, :, :, ind_use(ii, :));
+    bvals6 = bvals_dwi(ind_use(ii, :));
+    bvecs6 = bvecs_dwi(ind_use(ii, :), :);
+    
+    % compute apparent diffusion coefficients
+    adcs6 = log(dwis6 ./ b0); % s = s0 * exp(-b * adc) 
+    for jj = 1 : length(bvals6)
+        adcs6(:, :, :, jj) = adcs6(:, :, :, jj) / (-bvals6(jj)); % in case bvalues might be different for acquired dwis
+    end
+    
+    % compute tensors
+    adcs6_vec = reshape(adcs6, sz_data(1)*sz_data(2)*sz_data(3), size(adcs6, 4)); % transform volume data to vectors
+    A = amatrix(bvecs6); % tensor transformation matrix
+    tensor_vec = A \ adcs6_vec'; %i.e., inv(A) * adcs_vec'; solve Ax = b
+    tensor = reshape(tensor_vec', [sz_data(1:3), 6]); % transform tensors in vector form to volume
+    tensor(isnan(tensor)) = 0;
+    tensor(isinf(tensor)) = 0;
+    tensor_all{ii} = tensor;
 
-axis equal, axis off, axis tight
-title('indirect odf');
+    % synthesize dwis along DSM6 dirs
+    dwis6norm_vec_synth = exp(-bval_synth .* amatrix(dsm6_norm) * tensor_vec); % normalized dwi
+    dwis6_synth = b0 .* reshape(dwis6norm_vec_synth', [sz_data(1:3), size(dwis6norm_vec_synth, 1)]);    
+    dwis6_synth(isnan(dwis6_synth)) = 0;
+    dwis6_synth(isinf(dwis6_synth)) = 0;
+    
+    diff_input = cat(4, b0, dwis6_synth);
+    input_all{ii} = diff_input;
+end
+
+figure; % display synthesized dwis
+for ii = 1 : 2
+    diff_input = input_all{ii};
+    subplot(1, 2, ii)
+    imshow(diff_input(:, :, 35, 2), [0, 4000])
+    title('synthsized dwi');
+end
+
+figure; % display synthesized dwis
+for ii = 1 : 2
+    tensor = tensor_all{ii};
+    subplot(1, 2, ii)
+    
+    dtimetrics = decompose_tensor(tensor, mask);
+    fa = dtimetrics.fa;
+    imshow(fa(:, :, 35), [0, 1])
+    title('fractional anisotropy');
+end
+
+%% generate ground-truth data of CNN
+
+% compute apparent diffusion coefficients
+adcs = log(dwis ./ meanb0); % s = b0 * exp(-b * adc)
+for ii = 1 : size(adcs, 4)
+    adcs(:, :, :, ii) = adcs(:, :, :, ii) / (-bvals_dwi(ii)); % in case bvalues might be different for acquired dwis
+end
+
+adcs_vec = reshape(adcs, sz_data(1)*sz_data(2)*sz_data(3), size(adcs, 4)); % tx volume data to vectors
+tensor_gt_vec = amatrix(bvecs_dwi) \ adcs_vec'; % solve tensors
+tensor_gt = reshape(tensor_gt_vec', [sz_data(1:3), 6]); % tx vectors to volume
+tensor_gt(isnan(tensor_gt)) = 0;
+tensor_gt(isinf(tensor_gt)) = 0;
+
+% synthesize dwis along DSM6 dirs
+dwis6norm_vec_gt = exp(-bval_synth .* amatrix(dsm6_norm) * tensor_gt_vec);
+dwis6_gt = b0 .* reshape(dwis6norm_vec_gt', [sz_data(1:3), size(dwis6norm_vec_gt, 1)]);    
+dwis6_gt(isnan(dwis6_gt)) = 0;
+dwis6_gt(isinf(dwis6_gt)) = 0;
+
+diff_gt = cat(4, meanb0, dwis6_gt);
+
+figure; % display ground-truth dwi and fa
+subplot(1, 2, 1)
+imshow(diff_gt(:, :, 35, 2), [0, 4000])
+title('ground-truth dwi');
+    
+dtimetrics = decompose_tensor(tensor_gt, mask);
+fa = dtimetrics.fa;
+subplot(1, 2, 2)
+imshow(fa(:, :, 35), [0, 1])
+title('ground-truth fa');
+
+figure; % display residuals btx input dwis and ground truth
+for ii = 1 : 2
+    diff_input = input_all{ii};
+    subplot(1, 2, ii)
+    imagesc(diff_gt(:, :, 35, 2) - diff_input(:, :, 35, 2), [-1000, 1000])
+    axis image
+    title('residual image');
+    colormap(bgr_colormap);
+    colorbar;
+end
+
+%% save data
+
+% data is saved in unit16 to save sapce to be shared on Github
+% actual implemenation should use floating point to maintain precision
+diff_input1 = uint16(input_all{1});
+diff_input2 = uint16(input_all{2});
+diff_input3 = uint16(input_all{3});
+diff_input4 = uint16(input_all{4});
+diff_input5 = uint16(input_all{5});
+diff_gt = uint16(diff_gt);
+
+save('cnn_inout.mat', 'diff_input1', 'diff_input2', 'diff_input3', ...
+         'diff_input4', 'diff_input5', 'diff_gt');
