@@ -48,10 +48,10 @@ sz_data = size(data);
 
 figure; % display image data
 subplot(1, 2, 1)
-imshow(data(:, :, 35, 1), [0, 10000])
+imshow(rot90(data(:, :, 35, 1)), [0, 10000])
 title('b = 0 image');
 subplot(1, 2, 2)
-imshow(data(:, :, 35, 2), [0, 4000])
+imshow(rot90(data(:, :, 35, 2)), [0, 4000])
 title('diffusion weighted image');
 
 figure; % display diffusion encoding directions, all flipped to z > 0 
@@ -174,7 +174,7 @@ figure; % display synthesized dwis
 for ii = 1 : 2
     diff_input = input_all{ii};
     subplot(1, 2, ii)
-    imshow(diff_input(:, :, 35, 2), [0, 4000])
+    imshow(rot90(diff_input(:, :, 35, 2)), [0, 4000])
     title('synthsized dwi');
 end
 
@@ -185,7 +185,7 @@ for ii = 1 : 2
     
     dtimetrics = decompose_tensor(tensor, mask);
     fa = dtimetrics.fa;
-    imshow(fa(:, :, 35), [0, 1])
+    imshow(rot90(fa(:, :, 35)), [0, 1])
     title('fractional anisotropy');
 end
 
@@ -213,20 +213,20 @@ diff_gt = cat(4, meanb0, dwis6_gt);
 
 figure; % display ground-truth dwi and fa
 subplot(1, 2, 1)
-imshow(diff_gt(:, :, 35, 2), [0, 4000])
+imshow(rot90(diff_gt(:, :, 35, 2)), [0, 4000])
 title('ground-truth dwi');
     
 dtimetrics = decompose_tensor(tensor_gt, mask);
 fa = dtimetrics.fa;
 subplot(1, 2, 2)
-imshow(fa(:, :, 35), [0, 1])
+imshow(rot90(fa(:, :, 35)), [0, 1])
 title('ground-truth fa');
 
 figure; % display residuals btx input dwis and ground truth
 for ii = 1 : 2
     diff_input = input_all{ii};
     subplot(1, 2, ii)
-    imagesc(diff_gt(:, :, 35, 2) - diff_input(:, :, 35, 2), [-1000, 1000])
+    imagesc(rot90(diff_gt(:, :, 35, 2)) - rot90(diff_input(:, :, 35, 2)), [-1000, 1000])
     axis image
     title('residual image');
     colormap(bgr_colormap);
@@ -237,6 +237,7 @@ end
 
 % data is saved in unit16 to save sapce to be shared on Github
 % actual implemenation should use floating point to maintain precision
+% these input and output data can be used to train any CNN for denoising
 diff_input1 = uint16(input_all{1});
 diff_input2 = uint16(input_all{2});
 diff_input3 = uint16(input_all{3});
@@ -245,4 +246,4 @@ diff_input5 = uint16(input_all{5});
 diff_gt = uint16(diff_gt);
 
 save('cnn_inout.mat', 'diff_input1', 'diff_input2', 'diff_input3', ...
-         'diff_input4', 'diff_input5', 'diff_gt');
+         'diff_input4', 'diff_input5', 'diff_gt', 'mask');
