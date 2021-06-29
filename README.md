@@ -27,6 +27,16 @@ Step-by-step MATLAB tutorial for preparing the input and ground-truth data for c
 
 - *rot3d.m*: create 3D rotation matrix to rotate b-vectors
 
+## s_DeepDTI_trainCNN.m
+
+Step-by-step Python tutorial for training the DnCNN in DeepDTI.
+
+**Utility functions**
+
+- *dncnn.py*: create DnCNN model
+
+- *qtlib.py.py*: create custom loss functions to only include loss within brain mask, and extract blocks from whole brain volume data
+
 ## **HCP data**
 
 The example data are provided by the WU-Minn-Oxford Hhuman Connectome Project (HCP) (open access data use term at https://www.humanconnectome.org/study/hcp-young-adult/document/wu-minn-hcp-consortium-open-access-data-use-terms). Please acknowledge the source to the WU-Minn-Oxford HCP. The orginal data is available at https://www.humanconnectome.org/study/hcp-young-adult.
