@@ -1,4 +1,4 @@
-# DeepDTI
+# DeepDTI Tutorial
 
 ![DeepDTI Pipeline](https://github.com/qiyuantian/DeepDTI/blob/main/pipeline.png)
 
