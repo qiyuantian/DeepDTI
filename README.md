@@ -29,13 +29,19 @@ Step-by-step MATLAB tutorial for preparing the input and ground-truth data for c
 
 ## s_DeepDTI_trainCNN.py
 
-Step-by-step Python tutorial for training the DnCNN in DeepDTI using data prepared using the s_DeepDTI_prepData.m script .
+Step-by-step Python tutorial for training the DnCNN in DeepDTI using data prepared using the s_DeepDTI_prepData.m script.
 
 **Utility functions**
 
 - *dncnn.py*: create DnCNN model
 
 - *qtlib.py*: create custom loss functions to only include loss within brain mask, and extract blocks from whole brain volume data
+
+**Output**
+
+- *deepdti_nb1_ep100.h5*: DnCNN model trained for 100 epoches
+
+- *deepdti_nb1_ep100.mat*: L2 losses for the training and validation
 
 ## **HCP data**
 
