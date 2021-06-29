@@ -27,7 +27,7 @@ Step-by-step MATLAB tutorial for preparing the input and ground-truth data for c
 
 - *rot3d.m*: create 3D rotation matrix to rotate b-vectors
 
-## s_DeepDTI_trainCNN.m
+## s_DeepDTI_trainCNN.py
 
 Step-by-step Python tutorial for training the DnCNN in DeepDTI using data prepared using the s_DeepDTI_prepData.m script .
 
