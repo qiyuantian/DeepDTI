@@ -58,3 +58,9 @@ The example data are provided by the WU-Minn-Oxford Hhuman Connectome Project (H
 [1] Tian Q, Bilgic B, Fan Q, Liao C, Ngamsombat C, Hu Y, Witzel T, Setsompop K, Polimeni JR, Huang SY. [DeepDTI: High-fidelity Six-direction Diffusion Tensor Imaging using Deep Learning](https://www.sciencedirect.com/science/article/pii/S1053811920305036). *NeuroImage*, 2020; 219: 117017. [[**PDF**](https://reader.elsevier.com/reader/sd/pii/S1053811920305036?token=418648B5CF156F19FAA40EE9D65EFC87A6246FEAE675E1DBFD4B5517C0D512AD45F7891771E63DEC3D071E084A79F89E&originRegion=us-east-1&originCreation=20210627174144)]
 
 [2] Tian Q, Li Z, Fan Q, Ngamsombat C, Hu Y, Liao C, Wang F, Setsompop K, Polimeni JR, Bilgic B, Huang SY. [SRDTI: Deep learning-based super-resolution for diffusion tensor MRI.](https://arxiv.org/abs/2102.09069) *arXiv Preprint*, 2021; arXiv: 2102.09069. [[**PDF**](https://arxiv.org/pdf/2102.09069.pdf)]
+
+[3] Tian Q. Oral Presentation. The 2020 Workshop on Data Sampling & Image Reconstruction of ISMRM. [[**Video**](https://www.ismrm.org/workshops/2020/Data/)]
+
+[4] Tian Q. Power Pitch Oral Presentation. The 2020 Scientific Meeting of ISMRM. [[**Video**](https://cds.ismrm.org/protected/20MPresentations/videos/dcvz/0969.htm)]
+
+
