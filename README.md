@@ -61,6 +61,6 @@ The example data are provided by the WU-Minn-Oxford Hhuman Connectome Project (H
 
 [3] Tian Q. Oral Presentation. The 2020 Workshop on Data Sampling & Image Reconstruction of ISMRM. [[**Video**](https://www.ismrm.org/workshops/2020/Data/)]
 
-[4] Tian Q. Power Pitch Oral Presentation. The 2020 Scientific Meeting of ISMRM. [[**Video**](https://cds.ismrm.org/protected/20MPresentations/videos/dcvz/0969.htm)]
+[4] Tian Q. Power Pitch Oral Presentation. The 2020 Annual Scientific Meeting of ISMRM. [[**Video**](https://cds.ismrm.org/protected/20MPresentations/videos/dcvz/0969.htm)]
 
 
