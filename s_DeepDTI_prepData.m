@@ -28,10 +28,15 @@
 
 clear, clc, close all
 
-tmp = load('data.mat');
-data = double(tmp.data); % 18 b = 0 volumes and 90 dwi volumes, only 70 axial slices
-% image data were corrected for intensity bias already, can use dwibiascorrect from MRtrix3
-% we did not evaluate the effects of bias on the performance of CNN
+tmp = load('data.mat'); % example data was saved in unit16 to save sapce to be shared on Github.
+data = double(tmp.data); % 18 b = 0 volumes and 90 dwi volumes
+% due to size limit of github, only 70 axial slices are used here as
+% example data. actual implementation should use whole brain data. 
+% diffusion data were corrected for intensity bias already, which can be 
+% performed for new data using dwibiascorrect function from MRtrix3:
+% https://mrtrix.readthedocs.io/en/latest/reference/commands/dwibiascorrect.html
+% we did not evaluate the effects of bias on the performance of CNN, but do
+% not expect significant difference in results.
 bvals = tmp.bvals; % b = 1000 s/mm^2
 bvecs = tmp.bvecs;
 mask = tmp.mask;
@@ -62,9 +67,9 @@ title('90 diffusion encoding directions');
 
 %% select optimized encoding directions
 
-% 6 optimized directions from the DSM scheme that minimizes the condition
-% number of the diffusion tensor transformation matrix 
-% from S Skare et al., J Magn Reson. 2000;147(2):340-52
+% 6 optimized directions from the DSM scheme that minimize the condition
+% number of the diffusion tensor transformation matrix while are as uniform 
+% as possible. from S Skare et al., J Magn Reson. 2000;147(2):340-52.
 dsm6 = [0.91, 0.416, 0; ...
                0, 0.91, 0.416; ...
                0.416, 0, 0.91; ...
@@ -75,12 +80,12 @@ dsm6 = [0.91, 0.416, 0; ...
 dsm6_norm = dsm6 ./ sqrt(dsm6(:, 1) .^ 2 + dsm6(:, 2) .^ 2 + dsm6(:, 3) .^ 2); % normalize vectors
 
 % randomly rotate the DSM6 dirs, select their nearest 6 dirs from acquired
-% dirs, keep those with low condition number and angel difference
+% dirs, keep those with low condition number and angel difference.
 rotang_all = [];
 angerr_all  = [];
 condnum_all = [];
 ind_all = [];
-for ii = 1 : 100000 % number of iterations can be increased
+for ii = 1 : 100000 % number of iterations can be increased in actual implementation
     
     rotangs = rand(1, 3) * 2 * pi; % random angles to rotate around x, y, z axis
     R = rot3d(rotangs); % rotation matrix
@@ -235,9 +240,9 @@ end
 
 %% save data
 
-% data is saved in unit16 to save sapce to be shared on Github
-% actual implemenation should use floating point to maintain precision
-% these input and output data can be used to train any CNN for denoising
+% data is saved in unit16 to save sapce to be shared on Github.
+% actual implemenation should use floating point to maintain precision.
+% these input and output data can be used to train any CNN for denoising.
 diff_input1 = uint16(input_all{1});
 diff_input2 = uint16(input_all{2});
 diff_input3 = uint16(input_all{3});
