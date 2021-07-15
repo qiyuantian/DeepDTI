@@ -6,7 +6,7 @@
    <!--
 This HTML was auto-generated from MATLAB code.
 To make changes, update the MATLAB code and republish this document.
-      --><title>s_DeepDTI_prepData</title><meta name="generator" content="MATLAB 9.5"><link rel="schema.DC" href="http://purl.org/dc/elements/1.1/"><meta name="DC.date" content="2021-06-27"><meta name="DC.source" content="s_DeepDTI_prepData.m"><style type="text/css">
+      --><title>s_DeepDTI_prepData</title><meta name="generator" content="MATLAB 9.4"><link rel="schema.DC" href="http://purl.org/dc/elements/1.1/"><meta name="DC.date" content="2021-07-14"><meta name="DC.source" content="s_DeepDTI_prepData.m"><style type="text/css">
 html,body,div,span,applet,object,iframe,h1,h2,h3,h4,h5,h6,p,blockquote,pre,a,abbr,acronym,address,big,cite,code,del,dfn,em,font,img,ins,kbd,q,s,samp,small,strike,strong,sub,sup,tt,var,b,u,i,center,dl,dt,dd,ol,ul,li,fieldset,form,label,legend,table,caption,tbody,tfoot,thead,tr,th,td{margin:0;padding:0;border:0;outline:0;font-size:100%;vertical-align:baseline;background:transparent}body{line-height:1}ol,ul{list-style:none}blockquote,q{quotes:none}blockquote:before,blockquote:after,q:before,q:after{content:'';content:none}:focus{outine:0}ins{text-decoration:none}del{text-decoration:line-through}table{border-collapse:collapse;border-spacing:0}
 
 html { min-height:100%; margin-bottom:1px; }
@@ -91,10 +91,15 @@ table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px soli
 <span class="comment">% (c) Qiyuan Tian, Harvard, 2021</span>
 </pre><h2 id="2">load data</h2><pre class="codeinput">clear, clc, close <span class="string">all</span>
 
-tmp = load(<span class="string">'data.mat'</span>);
-data = double(tmp.data); <span class="comment">% 18 b = 0 volumes and 90 dwi volumes, only 70 axial slices</span>
-<span class="comment">% image data were corrected for intensity bias already, can use dwibiascorrect from MRtrix3</span>
-<span class="comment">% we did not evaluate the effects of bias on the performance of CNN</span>
+tmp = load(<span class="string">'data.mat'</span>); <span class="comment">% example data was saved in unit16 to save sapce to be shared on Github.</span>
+data = double(tmp.data); <span class="comment">% 18 b = 0 volumes and 90 dwi volumes</span>
+<span class="comment">% due to size limit of github, only 70 axial slices are used here as</span>
+<span class="comment">% example data. actual implementation should use whole brain data.</span>
+<span class="comment">% diffusion data were corrected for intensity bias already, which can be</span>
+<span class="comment">% performed for new data using dwibiascorrect function from MRtrix3:</span>
+<span class="comment">% https://mrtrix.readthedocs.io/en/latest/reference/commands/dwibiascorrect.html</span>
+<span class="comment">% we did not evaluate the effects of bias on the performance of CNN, but do</span>
+<span class="comment">% not expect significant difference in results.</span>
 bvals = tmp.bvals; <span class="comment">% b = 1000 s/mm^2</span>
 bvecs = tmp.bvecs;
 mask = tmp.mask;
@@ -111,10 +116,10 @@ sz_data = size(data);
 
 figure; <span class="comment">% display image data</span>
 subplot(1, 2, 1)
-imshow(data(:, :, 35, 1), [0, 10000])
+imshow(rot90(data(:, :, 35, 1)), [0, 10000])
 title(<span class="string">'b = 0 image'</span>);
 subplot(1, 2, 2)
-imshow(data(:, :, 35, 2), [0, 4000])
+imshow(rot90(data(:, :, 35, 2)), [0, 4000])
 title(<span class="string">'diffusion weighted image'</span>);
 
 figure; <span class="comment">% display diffusion encoding directions, all flipped to z &gt; 0</span>
@@ -122,9 +127,9 @@ plot3(dirs_vis(:, 1), dirs_vis(:, 2), dirs_vis(:, 3), <span class="string">'.'</
 grid <span class="string">on</span>, axis <span class="string">equal</span>
 zlim([-1, 1])
 title(<span class="string">'90 diffusion encoding directions'</span>);
-</pre><img vspace="5" hspace="5" src="s_DeepDTI_prepData_01.png" alt=""> <img vspace="5" hspace="5" src="s_DeepDTI_prepData_02.png" alt=""> <h2 id="3">select optimized encoding directions</h2><pre class="codeinput"><span class="comment">% 6 optimized directions from the DSM scheme that minimizes the condition</span>
-<span class="comment">% number of the diffusion tensor transformation matrix</span>
-<span class="comment">% from S Skare et al., J Magn Reson. 2000;147(2):340-52</span>
+</pre><img vspace="5" hspace="5" src="s_DeepDTI_prepData_01.png" alt=""> <img vspace="5" hspace="5" src="s_DeepDTI_prepData_02.png" alt=""> <h2 id="3">select optimized encoding directions</h2><pre class="codeinput"><span class="comment">% 6 optimized directions from the DSM scheme that minimize the condition</span>
+<span class="comment">% number of the diffusion tensor transformation matrix while are as uniform</span>
+<span class="comment">% as possible. from S Skare et al., J Magn Reson. 2000;147(2):340-52.</span>
 dsm6 = [0.91, 0.416, 0; <span class="keyword">...</span>
                0, 0.91, 0.416; <span class="keyword">...</span>
                0.416, 0, 0.91; <span class="keyword">...</span>
@@ -135,12 +140,12 @@ dsm6 = [0.91, 0.416, 0; <span class="keyword">...</span>
 dsm6_norm = dsm6 ./ sqrt(dsm6(:, 1) .^ 2 + dsm6(:, 2) .^ 2 + dsm6(:, 3) .^ 2); <span class="comment">% normalize vectors</span>
 
 <span class="comment">% randomly rotate the DSM6 dirs, select their nearest 6 dirs from acquired</span>
-<span class="comment">% dirs, keep those with low condition number and angel difference</span>
+<span class="comment">% dirs, keep those with low condition number and angel difference.</span>
 rotang_all = [];
 angerr_all  = [];
 condnum_all = [];
 ind_all = [];
-<span class="keyword">for</span> ii = 1 : 100000 <span class="comment">% number of iterations can be increased</span>
+<span class="keyword">for</span> ii = 1 : 100000 <span class="comment">% number of iterations can be increased in actual implementation</span>
 
     rotangs = rand(1, 3) * 2 * pi; <span class="comment">% random angles to rotate around x, y, z axis</span>
     R = rot3d(rotangs); <span class="comment">% rotation matrix</span>
@@ -232,7 +237,7 @@ figure; <span class="comment">% display synthesized dwis</span>
 <span class="keyword">for</span> ii = 1 : 2
     diff_input = input_all{ii};
     subplot(1, 2, ii)
-    imshow(diff_input(:, :, 35, 2), [0, 4000])
+    imshow(rot90(diff_input(:, :, 35, 2)), [0, 4000])
     title(<span class="string">'synthsized dwi'</span>);
 <span class="keyword">end</span>
 
@@ -243,7 +248,7 @@ figure; <span class="comment">% display synthesized dwis</span>
 
     dtimetrics = decompose_tensor(tensor, mask);
     fa = dtimetrics.fa;
-    imshow(fa(:, :, 35), [0, 1])
+    imshow(rot90(fa(:, :, 35)), [0, 1])
     title(<span class="string">'fractional anisotropy'</span>);
 <span class="keyword">end</span>
 </pre><img vspace="5" hspace="5" src="s_DeepDTI_prepData_04.png" alt=""> <img vspace="5" hspace="5" src="s_DeepDTI_prepData_05.png" alt=""> <h2 id="5">generate ground-truth data of CNN</h2><pre class="codeinput"><span class="comment">% compute apparent diffusion coefficients</span>
@@ -268,27 +273,28 @@ diff_gt = cat(4, meanb0, dwis6_gt);
 
 figure; <span class="comment">% display ground-truth dwi and fa</span>
 subplot(1, 2, 1)
-imshow(diff_gt(:, :, 35, 2), [0, 4000])
+imshow(rot90(diff_gt(:, :, 35, 2)), [0, 4000])
 title(<span class="string">'ground-truth dwi'</span>);
 
 dtimetrics = decompose_tensor(tensor_gt, mask);
 fa = dtimetrics.fa;
 subplot(1, 2, 2)
-imshow(fa(:, :, 35), [0, 1])
+imshow(rot90(fa(:, :, 35)), [0, 1])
 title(<span class="string">'ground-truth fa'</span>);
 
 figure; <span class="comment">% display residuals btx input dwis and ground truth</span>
 <span class="keyword">for</span> ii = 1 : 2
     diff_input = input_all{ii};
     subplot(1, 2, ii)
-    imagesc(diff_gt(:, :, 35, 2) - diff_input(:, :, 35, 2), [-1000, 1000])
+    imagesc(rot90(diff_gt(:, :, 35, 2)) - rot90(diff_input(:, :, 35, 2)), [-1000, 1000])
     axis <span class="string">image</span>
     title(<span class="string">'residual image'</span>);
     colormap(bgr_colormap);
     colorbar;
 <span class="keyword">end</span>
-</pre><img vspace="5" hspace="5" src="s_DeepDTI_prepData_06.png" alt=""> <img vspace="5" hspace="5" src="s_DeepDTI_prepData_07.png" alt=""> <h2 id="6">save data</h2><pre class="codeinput"><span class="comment">% data is saved in unit16 to save sapce to be shared on Github</span>
-<span class="comment">% actual implemenation should use floating point to maintain precision</span>
+</pre><img vspace="5" hspace="5" src="s_DeepDTI_prepData_06.png" alt=""> <img vspace="5" hspace="5" src="s_DeepDTI_prepData_07.png" alt=""> <h2 id="6">save data</h2><pre class="codeinput"><span class="comment">% data is saved in unit16 to save sapce to be shared on Github.</span>
+<span class="comment">% actual implemenation should use floating point to maintain precision.</span>
+<span class="comment">% these input and output data can be used to train any CNN for denoising.</span>
 diff_input1 = uint16(input_all{1});
 diff_input2 = uint16(input_all{2});
 diff_input3 = uint16(input_all{3});
@@ -297,8 +303,8 @@ diff_input5 = uint16(input_all{5});
 diff_gt = uint16(diff_gt);
 
 save(<span class="string">'cnn_inout.mat'</span>, <span class="string">'diff_input1'</span>, <span class="string">'diff_input2'</span>, <span class="string">'diff_input3'</span>, <span class="keyword">...</span>
-         <span class="string">'diff_input4'</span>, <span class="string">'diff_input5'</span>, <span class="string">'diff_gt'</span>);
-</pre><p class="footer"><br><a href="https://www.mathworks.com/products/matlab/">Published with MATLAB&reg; R2018b</a><br></p></div><!--
+         <span class="string">'diff_input4'</span>, <span class="string">'diff_input5'</span>, <span class="string">'diff_gt'</span>, <span class="string">'mask'</span>);
+</pre><p class="footer"><br><a href="https://www.mathworks.com/products/matlab/">Published with MATLAB&reg; R2018a</a><br></p></div><!--
 ##### SOURCE BEGIN #####
 %% introduction
 
@@ -330,10 +336,15 @@ save(<span class="string">'cnn_inout.mat'</span>, <span class="string">'diff_inp
 
 clear, clc, close all
 
-tmp = load('data.mat');
-data = double(tmp.data); % 18 b = 0 volumes and 90 dwi volumes, only 70 axial slices
-% image data were corrected for intensity bias already, can use dwibiascorrect from MRtrix3
-% we did not evaluate the effects of bias on the performance of CNN
+tmp = load('data.mat'); % example data was saved in unit16 to save sapce to be shared on Github.
+data = double(tmp.data); % 18 b = 0 volumes and 90 dwi volumes
+% due to size limit of github, only 70 axial slices are used here as
+% example data. actual implementation should use whole brain data. 
+% diffusion data were corrected for intensity bias already, which can be 
+% performed for new data using dwibiascorrect function from MRtrix3:
+% https://mrtrix.readthedocs.io/en/latest/reference/commands/dwibiascorrect.html
+% we did not evaluate the effects of bias on the performance of CNN, but do
+% not expect significant difference in results.
 bvals = tmp.bvals; % b = 1000 s/mm^2
 bvecs = tmp.bvecs;
 mask = tmp.mask;
@@ -350,10 +361,10 @@ sz_data = size(data);
 
 figure; % display image data
 subplot(1, 2, 1)
-imshow(data(:, :, 35, 1), [0, 10000])
+imshow(rot90(data(:, :, 35, 1)), [0, 10000])
 title('b = 0 image');
 subplot(1, 2, 2)
-imshow(data(:, :, 35, 2), [0, 4000])
+imshow(rot90(data(:, :, 35, 2)), [0, 4000])
 title('diffusion weighted image');
 
 figure; % display diffusion encoding directions, all flipped to z > 0 
@@ -364,9 +375,9 @@ title('90 diffusion encoding directions');
 
 %% select optimized encoding directions
 
-% 6 optimized directions from the DSM scheme that minimizes the condition
-% number of the diffusion tensor transformation matrix 
-% from S Skare et al., J Magn Reson. 2000;147(2):340-52
+% 6 optimized directions from the DSM scheme that minimize the condition
+% number of the diffusion tensor transformation matrix while are as uniform 
+% as possible. from S Skare et al., J Magn Reson. 2000;147(2):340-52.
 dsm6 = [0.91, 0.416, 0; ...
                0, 0.91, 0.416; ...
                0.416, 0, 0.91; ...
@@ -377,12 +388,12 @@ dsm6 = [0.91, 0.416, 0; ...
 dsm6_norm = dsm6 ./ sqrt(dsm6(:, 1) .^ 2 + dsm6(:, 2) .^ 2 + dsm6(:, 3) .^ 2); % normalize vectors
 
 % randomly rotate the DSM6 dirs, select their nearest 6 dirs from acquired
-% dirs, keep those with low condition number and angel difference
+% dirs, keep those with low condition number and angel difference.
 rotang_all = [];
 angerr_all  = [];
 condnum_all = [];
 ind_all = [];
-for ii = 1 : 100000 % number of iterations can be increased
+for ii = 1 : 100000 % number of iterations can be increased in actual implementation
     
     rotangs = rand(1, 3) * 2 * pi; % random angles to rotate around x, y, z axis
     R = rot3d(rotangs); % rotation matrix
@@ -476,7 +487,7 @@ figure; % display synthesized dwis
 for ii = 1 : 2
     diff_input = input_all{ii};
     subplot(1, 2, ii)
-    imshow(diff_input(:, :, 35, 2), [0, 4000])
+    imshow(rot90(diff_input(:, :, 35, 2)), [0, 4000])
     title('synthsized dwi');
 end
 
@@ -487,7 +498,7 @@ for ii = 1 : 2
     
     dtimetrics = decompose_tensor(tensor, mask);
     fa = dtimetrics.fa;
-    imshow(fa(:, :, 35), [0, 1])
+    imshow(rot90(fa(:, :, 35)), [0, 1])
     title('fractional anisotropy');
 end
 
@@ -515,20 +526,20 @@ diff_gt = cat(4, meanb0, dwis6_gt);
 
 figure; % display ground-truth dwi and fa
 subplot(1, 2, 1)
-imshow(diff_gt(:, :, 35, 2), [0, 4000])
+imshow(rot90(diff_gt(:, :, 35, 2)), [0, 4000])
 title('ground-truth dwi');
     
 dtimetrics = decompose_tensor(tensor_gt, mask);
 fa = dtimetrics.fa;
 subplot(1, 2, 2)
-imshow(fa(:, :, 35), [0, 1])
+imshow(rot90(fa(:, :, 35)), [0, 1])
 title('ground-truth fa');
 
 figure; % display residuals btx input dwis and ground truth
 for ii = 1 : 2
     diff_input = input_all{ii};
     subplot(1, 2, ii)
-    imagesc(diff_gt(:, :, 35, 2) - diff_input(:, :, 35, 2), [-1000, 1000])
+    imagesc(rot90(diff_gt(:, :, 35, 2)) - rot90(diff_input(:, :, 35, 2)), [-1000, 1000])
     axis image
     title('residual image');
     colormap(bgr_colormap);
@@ -537,8 +548,9 @@ end
 
 %% save data
 
-% data is saved in unit16 to save sapce to be shared on Github
-% actual implemenation should use floating point to maintain precision
+% data is saved in unit16 to save sapce to be shared on Github.
+% actual implemenation should use floating point to maintain precision.
+% these input and output data can be used to train any CNN for denoising.
 diff_input1 = uint16(input_all{1});
 diff_input2 = uint16(input_all{2});
 diff_input3 = uint16(input_all{3});
@@ -547,7 +559,7 @@ diff_input5 = uint16(input_all{5});
 diff_gt = uint16(diff_gt);
 
 save('cnn_inout.mat', 'diff_input1', 'diff_input2', 'diff_input3', ...
-         'diff_input4', 'diff_input5', 'diff_gt');
+         'diff_input4', 'diff_input5', 'diff_gt', 'mask');
 
 ##### SOURCE END #####
 --></body></html>
